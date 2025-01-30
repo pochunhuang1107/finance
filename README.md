@@ -104,6 +104,7 @@ Create a `.env` file in the **same directory** as `docker-compose.yml` (not comm
 POSTGRES_USER=admin
 POSTGRES_PASSWORD=admin
 POSTGRES_DB=finance_db
+POSTGRES_HOST=localhost
 
 YOUR_FERNET_KEY=32_char_random_string
 YOUR_SECRET_KEY=some_random_string
