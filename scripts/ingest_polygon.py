@@ -3,8 +3,9 @@ import sys
 import requests
 import psycopg2
 from datetime import datetime
+import time
 
-def fetch_grouped_daily(date_str, api_key):
+def fetch_grouped_daily(date_str, api_key, max_retries=3):
     """
     Fetches grouped daily bars for the given date (YYYY-MM-DD).
     Returns JSON response or None if failed.
@@ -14,13 +15,27 @@ def fetch_grouped_daily(date_str, api_key):
         "adjusted": "true",
         "apiKey": api_key
     }
-    try:
-        response = requests.get(base_url, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching data from Polygon: {e}")
-        return None
+
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(base_url, params=params)
+            if response.status_code == 200:
+                return response.json()
+
+            elif response.status_code == 429:  # Too Many Requests
+                retry_after = int(response.headers.get("Retry-After", 60))  # Use API suggested wait time if available
+                print(f"Rate limit hit. Retrying in {retry_after} seconds... (Attempt {attempt+1}/{max_retries})")
+                time.sleep(retry_after)
+
+            else:
+                response.raise_for_status()
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching data from Polygon: {e}")
+            time.sleep(10)  # Wait 10 seconds before retrying
+
+    print("Max retries reached. API request failed.")
+    return None
 
 def insert_daily_bars(records, db_config):
     """
