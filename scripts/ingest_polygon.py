@@ -130,9 +130,12 @@ def main():
 
     # 1. Fetch data from Polygon
     data = fetch_grouped_daily(date_str, POLYGON_API_KEY)
-    if not data or "results" not in data:
+    if not data or "resultsCount" not in data:
         print("No results found in Polygon response or API call failed.")
         sys.exit(1)
+    if not data["resultsCount"]:
+        print("Not a trading date")
+        sys.exit(0)
 
     # 2. Parse the results
     polygon_records = data["results"]
