@@ -7,5 +7,6 @@ CREATE TABLE IF NOT EXISTS daily_bars (
     low NUMERIC(12, 4),
     close NUMERIC(12, 4),
     volume BIGINT,
+    daily_return NUMERIC(12, 6),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
