@@ -2,6 +2,7 @@ import os
 import sys
 import requests
 import psycopg2
+from psycopg2.extras import execute_values
 from datetime import datetime
 import time
 
@@ -60,7 +61,7 @@ def insert_daily_bars(records, db_config):
     # Build insert query
     insert_query = """
         INSERT INTO daily_bars (ticker, trading_date, open, high, low, close, volume)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        VALUES %s
     """
 
     try:
@@ -75,20 +76,12 @@ def insert_daily_bars(records, db_config):
         conn.autocommit = True
         cur = conn.cursor()
 
-        # Insert each record
-        for rec in records:
-            cur.execute(
-                insert_query,
-                (
-                    rec["ticker"],
-                    rec["date"],
-                    rec["open"],
-                    rec["high"],
-                    rec["low"],
-                    rec["close"],
-                    rec["volume"]
-                )
-            )
+        # Bulk insert
+        records_list = [
+            (rec["ticker"], rec["date"], rec["open"], rec["high"], rec["low"], rec["close"], rec["volume"]) 
+            for rec in records
+        ]
+        execute_values(cur, insert_query, records_list)
 
         cur.close()
         conn.close()
