@@ -3,5 +3,6 @@ requests==2.32.3
 statsmodels==0.14.4
 pandas==2.2.3
 pmdarima==2.0.4
-numpy==1.24.4
+numpy==2.0.2
 sqlalchemy==2.0.37
+tensorflow==2.18.0
