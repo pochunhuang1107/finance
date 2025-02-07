@@ -8,5 +8,6 @@ CREATE TABLE IF NOT EXISTS daily_bars (
     close NUMERIC(12, 4),
     volume BIGINT,
     daily_return NUMERIC(12, 6),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_ticker_date UNIQUE (ticker, trading_date)
 );
