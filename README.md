@@ -4,27 +4,30 @@ This project aims to create a **daily batch ETL pipeline** for US stock market d
 
 ## Table of Contents
 
--   [Finance ETL and Machine Learning Project](#finance-etl-and-machine-learning-project)
-    -   [Table of Contents](#table-of-contents)
-    -   [Project Overview](#project-overview)
-    -   [Architecture](#architecture)
-    -   [Directory Structure](#directory-structure)
-        -   [2. Environment Variables (.env)](#2-environment-variables-env)
-        -   [3. Docker Compose](#3-docker-compose)
-        -   [4. Database Setup](#4-database-setup)
-        -   [5. Test Polygon API Script](#5-test-polygon-api-script)
-    -   [Usage](#usage)
-        -   [1. Airflow DAGs](#1-airflow-dags)
-            -   [Triggering DAG in Airflow](#triggering-dag-in-airflow)
-        -   [2. Scripts](#2-scripts)
-            -   [Local Environment Variables](#local-environment-variables)
-            -   [Ingestion \& Transform Scripts](#ingestion--transform-scripts)
-            -   [Machine Learning](#machine-learning)
-        -   [3. Backfill Historical Data](#3-backfill-historical-data)
-            -   [3.1 `backfill_polygon.sh`](#31-backfill_polygonsh)
-            -   [3.2 `backfill_daily_return.sh`](#32-backfill_daily_returnsh)
-    -   [License](#license)
-    -   [Contact](#contact)
+- [Finance ETL and Machine Learning Project](#finance-etl-and-machine-learning-project)
+  - [Table of Contents](#table-of-contents)
+  - [Project Overview](#project-overview)
+  - [Architecture](#architecture)
+  - [Directory Structure](#directory-structure)
+  - [Requirements](#requirements)
+  - [Setup](#setup)
+    - [1. Clone the Repository](#1-clone-the-repository)
+    - [2. Environment Variables (.env)](#2-environment-variables-env)
+    - [3. Docker Compose](#3-docker-compose)
+    - [4. Database Setup](#4-database-setup)
+    - [5. Test Polygon API Script](#5-test-polygon-api-script)
+  - [Usage](#usage)
+    - [1. Airflow DAGs](#1-airflow-dags)
+      - [Triggering DAG in Airflow](#triggering-dag-in-airflow)
+    - [2. Scripts](#2-scripts)
+      - [Local Environment Variables](#local-environment-variables)
+      - [Ingestion \& Transform Scripts](#ingestion--transform-scripts)
+      - [Machine Learning](#machine-learning)
+    - [3. Backfill Historical Data](#3-backfill-historical-data)
+      - [3.1 `backfill_polygon.sh`](#31-backfill_polygonsh)
+      - [3.2 `backfill_daily_return.sh`](#32-backfill_daily_returnsh)
+  - [License](#license)
+  - [Contact](#contact)
 
 ---
 
@@ -36,7 +39,7 @@ This project aims to create a **daily batch ETL pipeline** for US stock market d
     -   **PostgreSQL** for storing historical data
     -   **Python** scripts for ingestion, transformations, and machine learning
     -   **Docker Compose** for running Airflow + Postgres locally
--   **Machine Learning**: Uses historical data (including `daily_return`) for time-series or regression models.
+-   **Machine Learning**: Uses historical data (including `daily_return`) for time-series or regression models, with both **ARIMA** and **LSTM** approaches.
 
 ## Architecture
 
@@ -46,37 +49,40 @@ This project aims to create a **daily batch ETL pipeline** for US stock market d
     - `transform_data.py` to calculate `daily_return`
     - **Airflow DAG** (`polygon_etl_dag.py`) orchestrating daily ingestion & transform
 3. **Database**:
-    - **Postgres** holds all data in `daily_bars` (with columns for `ticker`, `trading_date`, `open`, `close`, `daily_return`, etc.)
+    - **Postgres** holds data in `daily_bars` (with columns for `ticker`, `trading_date`, `open`, `close`, `daily_return`, etc.)
 4. **ML**:
-    - A script (`train_model.py`) trains and forecasts time-series data from `daily_bars`.
+    - Several scripts (`train_model.py`, `train_arima_tuning.py`, `train_lstm_tuning.py`) for time-series forecasting experiments.
 
 ## Directory Structure
 
-````plaintext
+```plaintext
 finance/
 ├── dags/
 │   └── polygon_etl_dag.py         # Airflow DAG for daily ingestion + transform
 ├── scripts/
 │   ├── ingest_polygon.py          # Main ingestion script (Polygon -> Postgres)
 │   ├── transform_data.py          # Computes daily_return
-│   ├── train_model.py             # ML script (ARIMA example) for day 9
+│   ├── train_model.py             # Basic ARIMA model example
+│   ├── train_arima_tuning.py      # Auto-ARIMA hyperparameter tuning
+│   ├── train_lstm_tuning.py       # LSTM hyperparameter tuning
 │   └── test_polygon_api.py        # Quick script to fetch Polygon data
 ├── sql/
-│   └── create_tables.sql          # Includes daily_return column
+│   └── create_tables.sql          # Includes daily_return column + constraints
 ├── docker-compose.yml             # Airflow + Postgres local setup
 ├── requirements.txt               # Python dependencies
 ├── .env                           # Environment variables (excluded from Git)
 └── README.md
+```
 
 > **Note**: The `.env` file is excluded from version control. See [Environment Variables (.env)](#2-environment-variables-env) below.
 
 ## Requirements
 
-- **Docker Desktop** (for Docker Compose)
-- **Python 3.9+** (if you run scripts locally instead of inside Docker)
-- **Polygon.io** account & API key
-- **Git** (for version control)
-- **macOS** or **Linux** (shell scripts use `date -j -v+1d` or similar)
+-   **Docker Desktop** (for Docker Compose)
+-   **Python 3.9+** (if you run scripts locally instead of inside Docker)
+-   **Polygon.io** account & API key
+-   **Git** (for version control)
+-   **macOS** or **Linux** (shell scripts use `date -j -v+1d` or similar)
 
 ## Setup
 
@@ -86,7 +92,7 @@ finance/
 cd ~/Desktop/Project
 git clone https://github.com/pochunhuang1107/finance.git
 cd finance
-````
+```
 
 ### 2. Environment Variables (.env)
 
@@ -117,11 +123,11 @@ docker compose up -d
 ```
 
 -   **Airflow UI** is accessible at [http://localhost:8080](http://localhost:8080)
--   **Postgres** is at `localhost:5432` externally, and `postgres:5432` internally.
+-   **Postgres** is at `localhost:5432` externally, `postgres:5432` internally in Docker.
 
 ### 4. Database Setup
 
-Initialize `daily_bars` (which already includes `daily_return`):
+Initialize `daily_bars` (which includes `daily_return` and unique constraints):
 
 ```bash
 docker compose cp sql/create_tables.sql postgres:/tmp/create_tables.sql
@@ -159,8 +165,8 @@ Ensure it prints out the number of tickers returned for a given date.
 
 Your main DAG is `polygon_etl_dag.py`, which:
 
-1. **Ingests** daily data for yesterday (`ingest_polygon.py`).
-2. **Transforms** that data (`transform_data.py`) to compute `daily_return`.
+1. **Ingests** daily data for “yesterday” with `ingest_polygon.py`
+2. **Transforms** that data via `transform_data.py` to compute `daily_return`
 
 #### Triggering DAG in Airflow
 
@@ -172,7 +178,7 @@ Your main DAG is `polygon_etl_dag.py`, which:
 
 #### Local Environment Variables
 
-If you run any script **locally**, you must set environment variables. For example:
+If you run any script **locally**, you must set environment variables:
 
 ```bash
 export POLYGON_API_KEY=YOUR_POLYGON_API_KEY
@@ -183,7 +189,7 @@ export POSTGRES_HOST=localhost
 export POSTGRES_PORT=5432
 ```
 
-Then:
+Then install dependencies and run:
 
 ```bash
 pip install -r requirements.txt
@@ -194,11 +200,9 @@ python scripts/transform_data.py 2025-01-10
 #### Ingestion & Transform Scripts
 
 -   **`ingest_polygon.py`**:
-
     -   Takes a date (YYYY-MM-DD)
     -   Fetches grouped daily bars from Polygon
     -   Inserts rows into `daily_bars`
-
 -   **`transform_data.py`**:
     -   Takes the same date (YYYY-MM-DD)
     -   Finds the last available trading date before it
@@ -207,20 +211,24 @@ python scripts/transform_data.py 2025-01-10
 
 #### Machine Learning
 
--   **`train_model.py`**:
+1. **Basic ARIMA** (`train_model.py`):
 
-    -   Connects to Postgres via SQLAlchemy
-    -   Retrieves a single ticker’s close prices
-    -   Assigns a business-day frequency, forward-fills missing days
-    -   Fits a basic **ARIMA(1,1,1)** model
-    -   Prints summary and a one-day forecast
-    -   Example usage:
-
+    - Pulls close prices from `daily_bars`, forward-fills missing days
+    - Fits a simple **ARIMA(1,1,1)** model, prints summary
+    - Example:
         ```bash
-        export POSTGRES_USER=admin POSTGRES_PASSWORD=admin POSTGRES_DB=finance_db \
-        POSTGRES_HOST=localhost POSTGRES_PORT=5432
         python scripts/train_model.py AAPL
         ```
+
+2. **Auto-ARIMA Tuning** (`train_arima_tuning.py`):
+
+    - Tries extended parameters (e.g., `seasonal=True, m=5`) and logs results (AIC, RMSE, MAPE) in `arima_tuning_results.csv`.
+    - Compare multiple runs to find the best combination.
+
+3. **LSTM Tuning** (`train_lstm_tuning.py`):
+    - Explores different lookbacks, LSTM units, epochs, and batch sizes.
+    - Logs each run’s RMSE and MAPE in `lstm_tuning_results.csv`.
+    - Identify the best hyperparams for your time-series data.
 
 ### 3. Backfill Historical Data
 
@@ -302,9 +310,8 @@ Feel free to open an issue or pull request for any questions or improvements.
 
 ---
 
-**Happy coding and data engineering!** If you have any issues:
+**Happy coding and data engineering!**
 
--   Check Airflow logs: `docker compose logs -f`
--   Verify your `.env` is set correctly
--   Confirm local environment variables if you’re running Python scripts outside Docker
--   Check your `date` increment logic on macOS or Linux
+-   Check Airflow logs with `docker compose logs -f`.
+-   Verify `.env` if scripts fail locally.
+-   Inspect the CSV logs (`arima_tuning_results.csv`, `lstm_tuning_results.csv`) for your best models.
