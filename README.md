@@ -19,9 +19,11 @@ This project aims to create a **daily batch ETL pipeline** for US stock market d
   - [Usage](#usage)
     - [1. Airflow DAGs](#1-airflow-dags)
       - [Triggering DAG in Airflow](#triggering-dag-in-airflow)
+        - [Email Notifications](#email-notifications)
     - [2. Scripts](#2-scripts)
       - [Local Environment Variables](#local-environment-variables)
-      - [Ingestion \& Transform Scripts](#ingestion--transform-scripts)
+      - [Ingestion \& Logging](#ingestion--logging)
+      - [Transform Script](#transform-script)
       - [Machine Learning](#machine-learning)
     - [3. Backfill Historical Data](#3-backfill-historical-data)
       - [3.1 `backfill_polygon.sh`](#31-backfill_polygonsh)
@@ -39,19 +41,21 @@ This project aims to create a **daily batch ETL pipeline** for US stock market d
     -   **PostgreSQL** for storing historical data
     -   **Python** scripts for ingestion, transformations, and machine learning
     -   **Docker Compose** for running Airflow + Postgres locally
--   **Machine Learning**: Uses historical data (including `daily_return`) for time-series or regression models, with both **ARIMA** and **LSTM** approaches.
+-   **Machine Learning**: Uses historical data (including `daily_return`) for time-series or regression models. Both **ARIMA** and **LSTM** approaches are available, with tuning scripts.
 
 ## Architecture
 
 1. **Data Source**: Polygon.io “Grouped Daily (Bars)” endpoint.
 2. **ETL**:
     - `ingest_polygon.py` to fetch a single date and insert into Postgres
+    - Automatically logs ingestion stats (`row_count`, `duration_seconds`) into `ingestion_logs`
     - `transform_data.py` to calculate `daily_return`
-    - **Airflow DAG** (`polygon_etl_dag.py`) orchestrating daily ingestion & transform
+    - **Airflow DAG** (`polygon_etl_dag.py`) orchestrating daily ingestion & transform, with email alerts on failure
 3. **Database**:
-    - **Postgres** holds data in `daily_bars` (with columns for `ticker`, `trading_date`, `open`, `close`, `daily_return`, etc.)
+    - **Postgres** holds `daily_bars` (with columns for `ticker`, `trading_date`, `open`, `close`, `daily_return`, etc.)
+    - **`ingestion_logs`** table tracks ingestion job metrics
 4. **ML**:
-    - Several scripts (`train_model.py`, `train_arima_tuning.py`, `train_lstm_tuning.py`) for time-series forecasting experiments.
+    - Multiple scripts (`train_model.py`, `train_arima_tuning.py`, `train_lstm_tuning.py`) for time-series forecasting.
 
 ## Directory Structure
 
@@ -60,14 +64,15 @@ finance/
 ├── dags/
 │   └── polygon_etl_dag.py         # Airflow DAG for daily ingestion + transform
 ├── scripts/
-│   ├── ingest_polygon.py          # Main ingestion script (Polygon -> Postgres)
+│   ├── ingest_polygon.py          # Main ingestion script (Polygon -> Postgres), includes ingestion logging
 │   ├── transform_data.py          # Computes daily_return
 │   ├── train_model.py             # Basic ARIMA model example
 │   ├── train_arima_tuning.py      # Auto-ARIMA hyperparameter tuning
 │   ├── train_lstm_tuning.py       # LSTM hyperparameter tuning
 │   └── test_polygon_api.py        # Quick script to fetch Polygon data
 ├── sql/
-│   └── create_tables.sql          # Includes daily_return column + constraints
+│   ├── create_tables.sql          # Includes daily_return column, unique constraints
+│   └── create_logging_tables.sql  # Creates ingestion_logs table
 ├── docker-compose.yml             # Airflow + Postgres local setup
 ├── requirements.txt               # Python dependencies
 ├── .env                           # Environment variables (excluded from Git)
@@ -79,10 +84,10 @@ finance/
 ## Requirements
 
 -   **Docker Desktop** (for Docker Compose)
--   **Python 3.9+** (if you run scripts locally instead of inside Docker)
+-   **Python 3.9+** (if you run scripts locally rather than inside Docker)
 -   **Polygon.io** account & API key
 -   **Git** (for version control)
--   **macOS** or **Linux** (shell scripts use `date -j -v+1d` or similar)
+-   **macOS** or **Linux** (shell scripts rely on date commands)
 
 ## Setup
 
@@ -108,11 +113,14 @@ POSTGRES_PORT=5432
 
 YOUR_FERNET_KEY=32_char_random_string
 YOUR_SECRET_KEY=some_random_string
-
 POLYGON_API_KEY=YOUR_POLYGON_API_KEY
+
+# For Airflow email alerts (Gmail example):
+GMAIL_ACCOUNT=your_email@gmail.com
+GOOGLE_APP_PASSWORD=generated_app_password
 ```
 
--   Ensure `docker-compose.yml` references these variables for **airflow-webserver** and **airflow-scheduler**.
+-   Make sure `docker-compose.yml` references these variables in **airflow-webserver** and **airflow-scheduler**.
 
 ### 3. Docker Compose
 
@@ -122,33 +130,34 @@ Spin up Airflow and Postgres containers:
 docker compose up -d
 ```
 
--   **Airflow UI** is accessible at [http://localhost:8080](http://localhost:8080)
--   **Postgres** is at `localhost:5432` externally, `postgres:5432` internally in Docker.
+-   **Airflow UI** is accessible at [http://localhost:8080](http://localhost:8080).
+-   **Postgres** is at `localhost:5432` externally, `postgres:5432` internally.
 
 ### 4. Database Setup
 
-Initialize `daily_bars` (which includes `daily_return` and unique constraints):
+1. **Create main table** (`daily_bars`):
 
-```bash
-docker compose cp sql/create_tables.sql postgres:/tmp/create_tables.sql
-docker compose exec postgres psql \
-    -U $POSTGRES_USER \
-    -d $POSTGRES_DB \
-    -f /tmp/create_tables.sql
-```
+    ```bash
+    docker compose cp sql/create_tables.sql postgres:/tmp/create_tables.sql
+    docker compose exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/create_tables.sql
+    ```
+
+2. **Create logging table** (`ingestion_logs`):
+    ```bash
+    docker compose cp sql/create_logging_tables.sql postgres:/tmp/create_logging_tables.sql
+    docker compose exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/create_logging_tables.sql
+    ```
 
 Verify:
 
 ```bash
-docker compose exec postgres psql \
-    -U $POSTGRES_USER \
-    -d $POSTGRES_DB \
-    -c "\d daily_bars"
+docker compose exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB -c "\d daily_bars"
+docker compose exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB -c "\d ingestion_logs"
 ```
 
 ### 5. Test Polygon API Script
 
-If you want to run a quick test locally (with Python and `requests` installed):
+(Optional) If running scripts locally with Python:
 
 ```bash
 cd ~/Desktop/Project/finance
@@ -157,39 +166,45 @@ export POLYGON_API_KEY=YOUR_POLYGON_API_KEY
 python scripts/test_polygon_api.py
 ```
 
-Ensure it prints out the number of tickers returned for a given date.
+Check console output to see how many tickers were returned.
 
 ## Usage
 
 ### 1. Airflow DAGs
 
-Your main DAG is `polygon_etl_dag.py`, which:
+Your DAG **`polygon_etl_dag.py`**:
 
-1. **Ingests** daily data for “yesterday” with `ingest_polygon.py`
-2. **Transforms** that data via `transform_data.py` to compute `daily_return`
+-   Runs `ingest_polygon.py` daily (fetching “yesterday’s” data).
+-   Then calls `transform_data.py` to calculate `daily_return`.
+-   Configured with **`email_on_failure=True`** to notify you if tasks fail.
 
 #### Triggering DAG in Airflow
 
-1. Go to [http://localhost:8080](http://localhost:8080)
-2. Enable (“unpause”) `polygon_etl_dag`
-3. View logs to confirm ingestion + transformation
+1. Go to [http://localhost:8080](http://localhost:8080).
+2. Enable (unpause) `polygon_etl_dag`.
+3. Check logs to confirm ingestion + transform tasks.
+
+##### Email Notifications
+
+-   By default, if a task fails, you’ll get an email at `GMAIL_ACCOUNT`.
+-   Adjust if you have a different SMTP provider.
 
 ### 2. Scripts
 
 #### Local Environment Variables
 
-If you run any script **locally**, you must set environment variables:
+If you run scripts locally:
 
 ```bash
-export POLYGON_API_KEY=YOUR_POLYGON_API_KEY
 export POSTGRES_USER=admin
 export POSTGRES_PASSWORD=admin
 export POSTGRES_DB=finance_db
 export POSTGRES_HOST=localhost
 export POSTGRES_PORT=5432
+export POLYGON_API_KEY=YOUR_POLYGON_API_KEY
 ```
 
-Then install dependencies and run:
+Then:
 
 ```bash
 pip install -r requirements.txt
@@ -197,42 +212,38 @@ python scripts/ingest_polygon.py 2025-01-10
 python scripts/transform_data.py 2025-01-10
 ```
 
-#### Ingestion & Transform Scripts
+#### Ingestion & Logging
 
 -   **`ingest_polygon.py`**:
-    -   Takes a date (YYYY-MM-DD)
-    -   Fetches grouped daily bars from Polygon
-    -   Inserts rows into `daily_bars`
+    -   Takes a date, fetches data from Polygon, inserts into `daily_bars`.
+    -   Logs ingestion metrics (row_count, duration_seconds) into `ingestion_logs`.
+    -   **Handles** rate limits (HTTP 429) with retry logic.
+
+#### Transform Script
+
 -   **`transform_data.py`**:
-    -   Takes the same date (YYYY-MM-DD)
-    -   Finds the last available trading date before it
-    -   Computes `daily_return = (close(t) - close(t-1)) / close(t-1)`
-    -   Updates `daily_return` in `daily_bars`
+    -   Accepts the same date as the ingestion script.
+    -   Finds the last trading date before it.
+    -   Updates `daily_return = (close(t) - close(t-1)) / close(t-1)`.
 
 #### Machine Learning
 
-1. **Basic ARIMA** (`train_model.py`):
+1. **`train_model.py`**:
 
-    - Pulls close prices from `daily_bars`, forward-fills missing days
-    - Fits a simple **ARIMA(1,1,1)** model, prints summary
-    - Example:
-        ```bash
-        python scripts/train_model.py AAPL
-        ```
+    - Basic ARIMA(1,1,1) model on the close price.
 
-2. **Auto-ARIMA Tuning** (`train_arima_tuning.py`):
+2. **`train_arima_tuning.py`**:
 
-    - Tries extended parameters (e.g., `seasonal=True, m=5`) and logs results (AIC, RMSE, MAPE) in `arima_tuning_results.csv`.
-    - Compare multiple runs to find the best combination.
+    - Advanced auto-ARIMA with parameters, logs results in `arima_tuning_results.csv`.
 
-3. **LSTM Tuning** (`train_lstm_tuning.py`):
-    - Explores different lookbacks, LSTM units, epochs, and batch sizes.
-    - Logs each run’s RMSE and MAPE in `lstm_tuning_results.csv`.
-    - Identify the best hyperparams for your time-series data.
+3. **`train_lstm_tuning.py`**:
+    - Grid search for LSTM hyperparams (lookback, units, etc.), logs to `lstm_tuning_results.csv`.
 
 ### 3. Backfill Historical Data
 
 #### 3.1 `backfill_polygon.sh`
+
+Runs `ingest_polygon.py` for each date in a range. Example:
 
 ```bash
 #!/usr/bin/env bash
@@ -247,22 +258,16 @@ while [ "$CURRENT_DATE" != "$END_DATE" ]; do
   echo "Ingesting data for: $CURRENT_DATE"
   python scripts/ingest_polygon.py "$CURRENT_DATE"
 
-  # Increment the date by one day (macOS syntax)
+  # Increment date by one day (macOS syntax)
   CURRENT_DATE=$(date -j -v+1d -f "%Y-%m-%d" "$CURRENT_DATE" "+%Y-%m-%d")
 done
 
 echo "Backfill complete!"
 ```
 
-Usage:
-
-```bash
-cd scripts
-chmod +x backfill_polygon.sh
-./backfill_polygon.sh
-```
-
 #### 3.2 `backfill_daily_return.sh`
+
+Runs `transform_data.py` for each date in a range.
 
 ```bash
 #!/usr/bin/env bash
@@ -277,19 +282,11 @@ while [ "$CURRENT_DATE" != "$END_DATE" ]; do
   echo "Transform data for: $CURRENT_DATE"
   python scripts/transform_data.py "$CURRENT_DATE"
 
-  # Increment the date by one day
+  # Increment date by one day
   CURRENT_DATE=$(date -j -v+1d -f "%Y-%m-%d" "$CURRENT_DATE" "+%Y-%m-%d")
 done
 
 echo "Backfill complete!"
-```
-
-Usage:
-
-```bash
-cd scripts
-chmod +x backfill_daily_return.sh
-./backfill_daily_return.sh
 ```
 
 ## License
@@ -312,6 +309,6 @@ Feel free to open an issue or pull request for any questions or improvements.
 
 **Happy coding and data engineering!**
 
--   Check Airflow logs with `docker compose logs -f`.
--   Verify `.env` if scripts fail locally.
--   Inspect the CSV logs (`arima_tuning_results.csv`, `lstm_tuning_results.csv`) for your best models.
+-   Monitor Airflow logs via `docker compose logs -f`.
+-   Check `ingestion_logs` in Postgres for row counts & durations.
+-   If tasks fail, you’ll get an **email notification** (configured in `docker-compose.yml`).

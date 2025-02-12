@@ -90,11 +90,39 @@ def insert_daily_bars(records, db_config):
     except psycopg2.Error as e:
         print(f"Database error: {e}")
 
+def insert_ingestion_log(date_str, row_count, duration, db_config):
+    """
+    Inserts an ingestion log entry into the ingestion_logs table.
+    """
+    log_query = """
+        INSERT INTO ingestion_logs (ingestion_date, row_count, duration_seconds)
+        VALUES (%s, %s, %s)
+    """
+    try:
+        conn = psycopg2.connect(
+            user=db_config["user"],
+            password=db_config["password"],
+            host=db_config["host"],
+            port=db_config["port"],
+            database=db_config["dbname"]
+        )
+        conn.autocommit = True
+        cur = conn.cursor()
+        
+        cur.execute(log_query, (date_str, row_count, round(duration, 2)))
+        
+        cur.close()
+        conn.close()
+        print(f"Logged ingestion: {row_count} rows on {date_str}, took {duration:.2f} seconds.")
+    except psycopg2.Error as e:
+        print(f"Failed to log ingestion: {e}")
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python ingest_polygon.py <YYYY-MM-DD>")
         sys.exit(1)
 
+    start_time = time.time()
     date_str = sys.argv[1]
 
     # Get environment variables
@@ -156,6 +184,10 @@ def main():
 
     # 3. Insert into Postgres
     insert_daily_bars(records_to_insert, db_config)
+
+    row_count = len(records_to_insert)
+    duration = time.time() - start_time
+    insert_ingestion_log(date_str, row_count, duration, db_config)
 
 if __name__ == "__main__":
     main()

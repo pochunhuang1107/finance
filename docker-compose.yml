@@ -23,7 +23,22 @@ services:
             POSTGRES_HOST: postgres
             POSTGRES_PORT: 5432
             POLYGON_API_KEY: ${POLYGON_API_KEY}
+
+            # Airflow: use local executor or whichever you have
             AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
+            # Set logging to INFO
+            AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+
+            # Configure email notifications
+            AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
+            AIRFLOW__SMTP__SMTP_STARTTLS: 'True'
+            AIRFLOW__SMTP__SMTP_SSL: 'False'
+            AIRFLOW__SMTP__SMTP_USER: ${GMAIL_ACCOUNT}
+            AIRFLOW__SMTP__SMTP_PASSWORD: ${GOOGLE_APP_PASSWORD}
+            AIRFLOW__SMTP__SMTP_PORT: 587
+            AIRFLOW__SMTP__SMTP_MAIL_FROM: ${GMAIL_ACCOUNT}
+
             AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
             AIRFLOW__CORE__FERNET_KEY: ${YOUR_FERNET_KEY}
             AIRFLOW__WEBSERVER__SECRET_KEY: ${YOUR_SECRET_KEY}
@@ -51,7 +66,18 @@ services:
             POSTGRES_HOST: postgres
             POSTGRES_PORT: 5432
             POLYGON_API_KEY: ${POLYGON_API_KEY}
+
             AIRFLOW__CORE__EXECUTOR: LocalExecutor
+            AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+
+            AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
+            AIRFLOW__SMTP__SMTP_STARTTLS: 'True'
+            AIRFLOW__SMTP__SMTP_SSL: 'False'
+            AIRFLOW__SMTP__SMTP_USER: ${GMAIL_ACCOUNT}
+            AIRFLOW__SMTP__SMTP_PASSWORD: ${GOOGLE_APP_PASSWORD}
+            AIRFLOW__SMTP__SMTP_PORT: 587
+            AIRFLOW__SMTP__SMTP_MAIL_FROM: ${GMAIL_ACCOUNT}
+
             AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
             AIRFLOW__CORE__FERNET_KEY: ${YOUR_FERNET_KEY}
             AIRFLOW__WEBSERVER__SECRET_KEY: ${YOUR_SECRET_KEY}
