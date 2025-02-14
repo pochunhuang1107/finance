@@ -8,7 +8,7 @@ default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
     'email_on_failure': True,
-    'email': [os.getenv("GMAIL_ACCOUNT")]
+    'email': [os.getenv("AIRFLOW__SMTP__SMTP_USER")],
     'retries': 2,
     'retry_delay': timedelta(minutes=5)
 }
@@ -18,7 +18,7 @@ with DAG(
     dag_id='polygon_etl_dag',
     default_args=default_args,
     description='Daily ingestion of Polygon grouped bars into Postgres',
-    start_date=datetime(2025, 1, 31),
+    start_date=datetime(2025, 2, 12),
     schedule_interval='0 11 * * *', # adjusted to 11 AM UTC (equivalent to 6 AM EST)
     catchup=False,
     tags=['ETL', 'Polygon']
