@@ -1,8 +1,19 @@
-psycopg2-binary==2.9.6
-requests==2.32.3
-statsmodels==0.14.4
-pandas==2.2.3
-pmdarima==2.0.4
-numpy==2.0.2
-sqlalchemy==2.0.37
-tensorflow==2.18.0
+# PostgreSQL client
+psycopg2-binary
+
+# AWS SDK for Python (for S3, etc.)
+boto3
+
+# Data processing libraries
+pandas
+numpy
+
+# Airflow dependencies (for running DAGs)
+apache-airflow
+
+# API Requests (for fetching stock data from Polygon)
+requests
+
+# Data visualization (optional)
+matplotlib
+seaborn

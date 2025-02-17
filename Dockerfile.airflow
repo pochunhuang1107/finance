@@ -1,0 +1,19 @@
+# Use official Airflow image
+FROM apache/airflow:2.6.2
+
+# Install required dependencies
+RUN pip install --no-cache-dir psycopg2-binary boto3
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy DAGs and scripts
+COPY dags/ /opt/airflow/dags/
+COPY scripts/ /opt/airflow/scripts/
+
+# Set working directory
+WORKDIR /opt/airflow
+
+# Set default entrypoint (allows flexibility in ECS)
+CMD ["airflow", "webserver"]
